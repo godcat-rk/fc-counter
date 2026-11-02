@@ -30,15 +30,18 @@
 
 すべての項目は ±ボタンで補正できる。項目は10個まで作れる。
 
-## Windows への導入
+## 導入
 
-1. わんコメをインストールして一度起動し、YouTube の配信 URL を登録する。
-2. このフォルダで PowerShell を開いて `.\install.ps1` を実行する。プラグインは `%APPDATA%\onecomme\plugins\fc-counter\` に、テンプレートは `%APPDATA%\onecomme\templates\custom\fc-counter\` にコピーされる。
-3. わんコメを再起動し、設定のプラグイン一覧で fc-counter を有効にする。
-4. OBS で次の2つを登録する。
-   - ブラウザソース（幅1920・高さ1080）: `http://localhost:11180/templates/custom/fc-counter/index.html`
-   - ドック → カスタムブラウザドック: `http://localhost:11180/templates/custom/fc-counter/controller.html`
-5. 操作画面の「テスト」を開いて偽のコメントを流し、表示画面の数が増えることを確かめる。
+**[docs/setup.md](docs/setup.md) に、clone した直後から OBS に表示が出るまでの手順がある。** わんコメと OBS の導入、動作確認、詰まったときの切り分けまで含む。
+
+最短で言うと次の4つ。
+
+1. わんコメを入れて起動し、YouTube にログインする
+2. clone したフォルダで `.\install.ps1` を実行する
+3. わんコメのプラグインウィンドウで「再読み込み」し、fc-counter を有効にする
+4. OBS にブラウザソース（表示画面）とカスタムブラウザドック（操作画面）を登録する
+
+使うだけなら Node.js は要らない。`npm test` と `npm run dev` のときだけ必要。
 
 ## 開発（わんコメなし）
 
