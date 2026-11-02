@@ -28,10 +28,17 @@ async function setup(counters) {
 }
 
 let seq = 0
+// 最上位の id は枠の ID で、同じ枠のコメントでは同じ値になる。
+// コメントごとに一意なのは data.id のほう（わんコメの実データで確認済み）。
+const FRAME_ID = 'COMMENT_TESTER'
 function comment(userId, extra = {}, dataExtra = {}) {
   seq++
-  const id = 'id' + seq
-  return { id, service: 'youtube', ...extra, data: { id, userId, liveId: 'L', isOwner: false, hasGift: false, comment: 'hi', ...dataExtra } }
+  return { id: FRAME_ID, service: 'youtube', ...extra, data: { id: 'c' + seq, userId, liveId: 'L', isOwner: false, hasGift: false, comment: 'hi', ...dataExtra } }
+}
+
+// わんコメがプラグインへ渡す本物の形
+function deliver(plugin, list) {
+  plugin.subscribe('comments', { comments: list, userNameMap: {}, options: {} })
 }
 
 function val(s, name) {
@@ -45,9 +52,9 @@ test('コメント数・人数・初見を数え、同じコメントは二重�
     { name: 'F', metric: 'firstTimers', goal: 0 },
   ])
   const a1 = comment('a', {}, { isFirstTime: true })
-  t.plugin.subscribe('comments', [a1, comment('a'), comment('b')])
-  t.plugin.subscribe('comments', [a1]) // 再送
-  t.plugin.subscribe('comments', [comment('owner', {}, { isOwner: true })])
+  deliver(t.plugin, [a1, comment('a'), comment('b')])
+  deliver(t.plugin, [a1]) // 再送
+  deliver(t.plugin, [comment('owner', {}, { isOwner: true })])
   const s = await t.get()
   assert.strictEqual(val(s, 'C'), 3)
   assert.strictEqual(val(s, 'U'), 2)
@@ -56,13 +63,13 @@ test('コメント数・人数・初見を数え、同じコメントは二重�
 
 test('連投制限は時間内の発言を数えない', async () => {
   const t = await setup([{ name: 'C', metric: 'comments', goal: 0, opts: { cooldownSec: 60 } }])
-  t.plugin.subscribe('comments', [comment('a'), comment('a'), comment('b')])
+  deliver(t.plugin, [comment('a'), comment('a'), comment('b')])
   assert.strictEqual(val(await t.get(), 'C'), 2)
 })
 
 test('キーワードは1人1回まで、部分一致で数える', async () => {
   const t = await setup([{ name: 'K', metric: 'keyword', goal: 0, opts: { keyword: '888', oncePerUser: true } }])
-  t.plugin.subscribe('comments', [comment('a', {}, { comment: 'わー8888' }), comment('a', {}, { comment: '888' }), comment('b', {}, { comment: 'こんにちは' })])
+  deliver(t.plugin, [comment('a', {}, { comment: 'わー8888' }), comment('a', {}, { comment: '888' }), comment('b', {}, { comment: 'こんにちは' })])
   assert.strictEqual(val(await t.get(), 'K'), 1)
 })
 
@@ -71,7 +78,7 @@ test('スパチャは円建てだけ合計し、メンバーはギフト件数�
     { name: 'S', metric: 'superchat', goal: 1000 },
     { name: 'M', metric: 'members', goal: 0 },
   ])
-  t.plugin.subscribe('comments', [
+  deliver(t.plugin, [
     comment('a', {}, { hasGift: true, price: 500, currency: 'JPY', giftType: 'superchat' }),
     comment('b', {}, { hasGift: true, price: 5, currency: 'USD', giftType: 'superchat' }),
     comment('c', {}, { hasGift: true, giftType: 'subscribe' }),
@@ -87,7 +94,7 @@ test('スパチャはコメントとしても数え、メンバー加入の通�
     { name: 'C', metric: 'comments', goal: 0 },
     { name: 'U', metric: 'commenters', goal: 0 },
   ])
-  t.plugin.subscribe('comments', [
+  deliver(t.plugin, [
     comment('a', {}, { hasGift: true, price: 500, currency: 'JPY', giftType: 'superchat' }),
     comment('b', {}, { hasGift: true, giftType: 'subscribe' }),
   ])
@@ -139,4 +146,38 @@ test('POST の本文が文字列で届いても受け付ける', async () => {
   const t = await setup([{ name: 'X', metric: 'manual', goal: 0 }])
   await call(t.plugin, 'POST', JSON.stringify({ action: 'inc', id: t.byName('X').id, delta: 3 }))
   assert.strictEqual(val(await t.get(), 'X'), 3)
+})
+
+test('わんコメは { comments } の形で渡す。配列直渡しも受ける', async () => {
+  const t = await setup([{ name: 'C', metric: 'comments', goal: 0 }])
+  // 本物のプラグイン経路
+  t.plugin.subscribe('comments', { comments: [comment('a')], userNameMap: {}, options: {} })
+  assert.strictEqual(val(await t.get(), 'C'), 1)
+  // WebSocket API 相当の配列直渡し
+  t.plugin.subscribe('comments', [comment('b')])
+  assert.strictEqual(val(await t.get(), 'C'), 2)
+  // 想定外の形は無視して落ちない
+  t.plugin.subscribe('comments', undefined)
+  t.plugin.subscribe('comments', { comments: null })
+  assert.strictEqual(val(await t.get(), 'C'), 2)
+})
+
+test('同じ枠の別コメントを二重排除しない（判定は data.id）', async () => {
+  const t = await setup([{ name: 'C', metric: 'comments', goal: 0 }])
+  // 最上位 id は 3 件とも同じ枠 ID。data.id だけが違う
+  const list = [comment('a'), comment('b'), comment('c')]
+  assert.strictEqual(new Set(list.map((c) => c.id)).size, 1)
+  deliver(t.plugin, list)
+  assert.strictEqual(val(await t.get(), 'C'), 3)
+})
+
+test('再配送（meta.isUpdate）は数えない', async () => {
+  const t = await setup([{ name: 'C', metric: 'comments', goal: 0 }])
+  const a = comment('a')
+  deliver(t.plugin, [a])
+  // 同じ data.id で中身が更新されて届く
+  deliver(t.plugin, [{ ...a, meta: { isUpdate: true } }])
+  // 別の data.id でも更新配送なら数えない
+  deliver(t.plugin, [{ ...comment('b'), meta: { isUpdate: true } }])
+  assert.strictEqual(val(await t.get(), 'C'), 1)
 })

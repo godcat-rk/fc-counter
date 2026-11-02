@@ -211,8 +211,9 @@ function countFor(c, comment, d, t) {
 
 function ingestComment(comment) {
   if (!comment || !comment.data || comment.service === 'system') return false
+  if (comment.meta && comment.meta.isUpdate) return false
   const d = comment.data
-  const id = comment.service + ':' + (comment.id || d.id)
+  const id = comment.service + ':' + (d.id || comment.id)
   if (state.session.processed.includes(id)) return false
   markProcessed(id)
   if (d.isOwner) return false
@@ -463,6 +464,14 @@ function migrate(saved) {
   }
 }
 
+// わんコメはプラグインへ { comments, userNameMap, options } の形で渡す。
+// WebSocket API は配列をそのまま送るため、どちらでも受け取れるようにする。
+function commentsOf(payload) {
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.comments)) return payload.comments
+  return []
+}
+
 function parseBody(body) {
   if (body == null) return {}
   if (typeof body === 'string') {
@@ -498,8 +507,7 @@ const plugin = {
     if (!state) state = defaultState()
     let changed = false
     if (type === 'comments') {
-      const list = Array.isArray(args[0]) ? args[0] : []
-      for (const c of list) changed = ingestComment(c) || changed
+      for (const c of commentsOf(args[0])) changed = ingestComment(c) || changed
     } else if (type === 'meta') {
       changed = ingestMeta(args[0])
     }
