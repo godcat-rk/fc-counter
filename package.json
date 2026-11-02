@@ -1,0 +1,10 @@
+{
+  "name": "fc-counter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "配信の目標達成度をOBS上に表示するカウンター（わんコメ プラグイン＋テンプレート）",
+  "scripts": {
+    "dev": "node dev/server.js --auto",
+    "test": "node --test test/plugin.test.js"
+  }
+}

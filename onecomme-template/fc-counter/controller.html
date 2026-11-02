@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fc-counter 操作</title>
+<style>
+  :root {
+    --bg: #1b1e27;
+    --panel: #252a36;
+    --line: #353b4b;
+    --text: #e8ebf2;
+    --muted: #9aa3b5;
+    --accent: #4fc3f7;
+    --danger: #ff6b6b;
+    --ok: #5bd18b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 'Meiryo', 'Hiragino Sans', sans-serif;
+  }
+  h2 {
+    margin: 14px 0 6px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: normal;
+    letter-spacing: .05em;
+  }
+  button, input, select {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    background: #323848;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+  }
+  button:hover { background: #3c4356; }
+  button:active { transform: translateY(1px); }
+  button.primary { background: #2a6f8f; border-color: #3a8fb5; }
+  button.danger { color: var(--danger); }
+  input, select {
+    background: #171a22;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 6px;
+    min-width: 0;
+  }
+  input[type=color] { padding: 0 2px; height: 28px; width: 40px; }
+  input[type=checkbox] { width: auto; }
+
+  #status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 12px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #777; flex: none; }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: #f5c04a; }
+  .dot.ng { background: var(--danger); }
+  #status .live { margin-left: auto; color: var(--muted); white-space: nowrap; }
+
+  .item {
+    background: var(--panel);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    border-left: 4px solid var(--c);
+    overflow: hidden;
+  }
+  .item.hidden-item { opacity: .55; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+  }
+  .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .name small { color: var(--muted); margin-left: 4px; }
+  .row .val { font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row .val small { color: var(--muted); font-weight: normal; }
+  .row .done-mark { color: #ffd54f; }
+  .btns { display: flex; gap: 4px; padding: 0 8px 8px; }
+  .btns button { flex: 1; padding: 4px 0; }
+  .bar { height: 3px; background: #171a22; }
+  .bar i { display: block; height: 100%; background: var(--c); transition: width .4s; }
+
+  .edit {
+    display: none;
+    padding: 8px;
+    border-top: 1px solid var(--line);
+    gap: 6px;
+    grid-template-columns: 76px 1fr;
+    align-items: center;
+  }
+  .item.open .edit { display: grid; }
+  .edit label { color: var(--muted); font-size: 12px; }
+  .edit .full { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+  .edit .hint { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .panel { background: var(--panel); border-radius: 8px; padding: 8px; }
+  .panel .line { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .panel .line:last-child { margin-bottom: 0; }
+  .panel .line > span { color: var(--muted); font-size: 12px; min-width: 56px; }
+
+  #toast {
+    position: fixed;
+    left: 10px; right: 10px; bottom: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #5a2430;
+    color: #fff;
+    display: none;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin: 14px 0 6px; }
+</style>
+</head>
+<body>
+
+<div id="status"><span class="dot" id="dot"></span><span id="statusText">接続中…</span><span class="live" id="liveText"></span></div>
+
+<h2>カウンター</h2>
+<div id="list"></div>
+<button id="add" class="primary" style="width:100%">＋ 項目を追加</button>
+
+<h2>配信</h2>
+<div class="panel">
+  <div class="line">
+    <button id="newSession" class="danger" style="flex:1">新しい配信を始める（数を0に戻す）</button>
+  </div>
+  <div class="line" style="color:var(--muted);font-size:11px">コメントした人数・初見・キーワードの重複判定もここでリセットされる</div>
+</div>
+
+<h2>表示</h2>
+<div class="panel">
+  <div class="line">
+    <span>位置</span>
+    <select id="position" style="flex:1">
+      <option value="bottom-left">左下に横並び</option>
+      <option value="bottom-center">下中央に横並び</option>
+      <option value="bottom-right">右下に横並び</option>
+      <option value="top-left">左上に横並び</option>
+      <option value="top-right">右上に横並び</option>
+      <option value="left">左端に縦並び</option>
+      <option value="right">右端に縦並び</option>
+    </select>
+  </div>
+  <div class="line">
+    <span>大きさ</span>
+    <input id="scale" type="range" min="0.4" max="2" step="0.05" style="flex:1">
+    <span id="scaleText" style="min-width:36px;text-align:right"></span>
+  </div>
+  <div class="line">
+    <label><input id="celebrate" type="checkbox"> 目標達成で画面全体の演出を出す</label>
+  </div>
+</div>
+
+<details>
+  <summary>テスト（偽のイベントを流す）</summary>
+  <div class="panel">
+    <div class="line">
+      <button data-sim="comment">コメント</button>
+      <button data-sim="comment5">コメント×5</button>
+      <button data-sim="first">初見コメント</button>
+    </div>
+    <div class="line">
+      <input id="simText" placeholder="コメント本文（キーワード確認用）" style="flex:1">
+      <button data-sim="text">送る</button>
+    </div>
+    <div class="line">
+      <input id="simAmount" type="number" value="500" style="width:90px"><span style="min-width:0">円</span>
+      <button data-sim="superchat">スパチャ</button>
+      <button data-sim="member">メンバー加入</button>
+    </div>
+    <div class="line">
+      <span>同接</span><input id="simViewer" type="number" value="30" style="width:70px">
+      <span>高評価</span><input id="simLikes" type="number" value="40" style="width:70px">
+      <button data-sim="meta">反映</button>
+    </div>
+  </div>
+</details>
+
+<div id="toast"></div>
+
+<script src="common.js"></script>
+<script>
+(() => {
+  const list = document.getElementById('list')
+  const toast = document.getElementById('toast')
+  const openIds = new Set()
+  let latest = null
+  let editing = false // 入力中は一覧を描き直さない
+
+  function showError(msg) {
+    toast.textContent = msg
+    toast.style.display = 'block'
+    clearTimeout(showError.t)
+    showError.t = setTimeout(() => (toast.style.display = 'none'), 4000)
+  }
+
+  async function act(action, payload) {
+    try {
+      const s = await FC.send(action, payload)
+      apply(s, false)
+    } catch (e) {
+      showError(e.message)
+    }
+  }
+
+  function unit(c) {
+    return c.metric === 'superchat' ? '円' : ''
+  }
+
+  function metricOptions(selected) {
+    return Object.entries(latest.metrics)
+      .map(([k, v]) => '<option value="' + k + '"' + (k === selected ? ' selected' : '') + '>' + v + '</option>')
+      .join('')
+  }
+
+  function optionFields(c) {
+    const o = c.opts
+    if (c.metric === 'comments')
+      return '<label>連投制限</label><div><input data-f="cooldownSec" type="number" min="0" value="' + o.cooldownSec + '" style="width:70px"> 秒に1回まで（0で制限なし）</div>'
+    if (c.metric === 'keyword')
+      return '<label>キーワード</label><input data-f="keyword" value="' + FC.esc(o.keyword) + '" placeholder="例: 888">' +
+        '<div class="full"><label><input data-f="oncePerUser" type="checkbox"' + (o.oncePerUser ? ' checked' : '') + '> 1人1回まで</label></div>'
+    if (c.metric === 'members')
+      return '<div class="full"><label><input data-f="includeGifts" type="checkbox"' + (o.includeGifts ? ' checked' : '') + '> メンバーシップギフトの件数も数える</label></div>'
+    if (c.metric === 'superchat')
+      return '<div class="hint">円建てのスパチャ・スーパーステッカーだけを合計する（外貨は数えない）</div>'
+    if (c.metric === 'viewers' || c.metric === 'likes')
+      return '<div class="hint">わんコメが受け取った現在値をそのまま表示する。±ボタンは補正として上乗せされる</div>'
+    if (c.metric === 'commenters' || c.metric === 'firstTimers')
+      return '<div class="hint">この配信の中で1人1回だけ数える</div>'
+    return ''
+  }
+
+  function itemHtml(c) {
+    const pct = c.goal > 0 ? Math.min(100, (c.value / c.goal) * 100) : 0
+    return (
+      '<div class="row">' +
+        '<span class="name">' + FC.esc(c.name) + '<small>' + FC.esc(latest.metrics[c.metric]) + '</small></span>' +
+        '<span class="val">' + valHtml(c) + '</span>' +
+        '<button data-a="toggle" title="設定">⚙</button>' +
+      '</div>' +
+      '<div class="btns">' +
+        '<button data-a="inc" data-d="-1">−1</button>' +
+        '<button data-a="inc" data-d="1">+1</button>' +
+        '<button data-a="inc" data-d="10">+10</button>' +
+        '<button data-a="inc" data-d="100">+100</button>' +
+      '</div>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="edit">' +
+        '<label>名前</label><input data-f="name" value="' + FC.esc(c.name) + '" maxlength="30">' +
+        '<label>数え方</label><select data-f="metric">' + metricOptions(c.metric) + '</select>' +
+        '<label>目標</label><div><input data-f="goal" type="number" min="0" value="' + c.goal + '" style="width:100px"> ' + unit(c) + '（0で目標なし）</div>' +
+        '<label>色</label><input data-f="color" type="color" value="' + c.color + '">' +
+        optionFields(c) +
+        '<label>値を直接</label><div><input data-f="setValue" type="number" min="0" value="' + c.value + '" style="width:100px"> <button data-a="setValue">反映</button></div>' +
+        '<div class="full">' +
+          '<label><input data-f="visible" type="checkbox"' + (c.visible ? ' checked' : '') + '> 表示する</label>' +
+        '</div>' +
+        '<div class="full">' +
+          '<button data-a="up">↑</button><button data-a="down">↓</button>' +
+          '<button data-a="testGoal">達成演出を試す</button>' +
+          '<button data-a="reset">0に戻す</button>' +
+          '<button data-a="remove" class="danger">削除</button>' +
+        '</div>' +
+      '</div>'
+    )
+  }
+
+  function valHtml(c) {
+    return (c.achievedAt ? '<span class="done-mark">★</span> ' : '') + FC.fmt(c.value) + unit(c) + (c.goal > 0 ? ' <small>/ ' + FC.fmt(c.goal) + '</small>' : '')
+  }
+
+  // 項目の構成（数字以外）が変わったときだけ描き直す。数字だけの変化で
+  // ボタンを作り直すと、押している最中のクリックが失われるため
+  let lastSig = null
+  function renderList(force) {
+    const sig = JSON.stringify(latest.counters.map((c) => [c.id, c.name, c.metric, c.goal, c.color, c.visible, c.opts]))
+    if ((editing || sig === lastSig) && !force) {
+      for (const c of latest.counters) {
+        const item = list.querySelector('[data-id="' + c.id + '"]')
+        if (!item) continue
+        item.querySelector('.val').innerHTML = valHtml(c)
+        item.querySelector('.bar i').style.width = (c.goal > 0 ? Math.min(100, (c.value / c.goal) * 100) : 0) + '%'
+        const sv = item.querySelector('[data-f=setValue]')
+        if (sv && document.activeElement !== sv) sv.value = c.value
+      }
+      return
+    }
+    lastSig = sig
+    list.innerHTML = latest.counters
+      .map((c) => '<div class="item' + (openIds.has(c.id) ? ' open' : '') + (c.visible ? '' : ' hidden-item') + '" data-id="' + c.id + '" style="--c:' + c.color + '">' + itemHtml(c) + '</div>')
+      .join('')
+    document.getElementById('add').disabled = latest.counters.length >= 10
+  }
+
+  function renderStatus(s) {
+    const dot = document.getElementById('dot')
+    const text = document.getElementById('statusText')
+    const t = s.serverTime
+    const lastAny = Math.max(s.status.lastCommentAt || 0, s.status.lastMetaAt || 0)
+    if (!lastAny) {
+      dot.className = 'dot warn'
+      text.textContent = 'プラグイン接続OK・配信データ待ち'
+    } else if (t - lastAny < 120000) {
+      dot.className = 'dot ok'
+      text.textContent = '受信中'
+    } else {
+      dot.className = 'dot warn'
+      text.textContent = Math.floor((t - lastAny) / 60000) + '分間データなし'
+    }
+    const parts = []
+    if (s.live.viewer != null) parts.push('同接 ' + FC.fmt(s.live.viewer))
+    if (s.live.likes != null) parts.push('👍 ' + FC.fmt(s.live.likes))
+    document.getElementById('liveText').textContent = parts.join('  ')
+  }
+
+  function renderLayout(s) {
+    if (document.activeElement && document.activeElement.closest('.panel')) return
+    document.getElementById('position').value = s.layout.position
+    document.getElementById('scale').value = s.layout.scale
+    document.getElementById('scaleText').textContent = Math.round(s.layout.scale * 100) + '%'
+    document.getElementById('celebrate').checked = s.layout.celebrate
+  }
+
+  let lastRev = null
+  function apply(s, force) {
+    latest = s
+    renderStatus(s)
+    if (force || s.rev !== lastRev) {
+      renderList(force)
+      renderLayout(s)
+    }
+    lastRev = s.rev
+  }
+
+  // 一覧の操作
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-a]')
+    if (!btn) return
+    const item = btn.closest('.item')
+    const id = item.dataset.id
+    const a = btn.dataset.a
+    if (a === 'toggle') {
+      if (openIds.has(id)) openIds.delete(id)
+      else openIds.add(id)
+      item.classList.toggle('open')
+      return
+    }
+    if (a === 'inc') return act('inc', { id, delta: Number(btn.dataset.d) })
+    if (a === 'up' || a === 'down') return act('move', { id, dir: a === 'up' ? -1 : 1 })
+    if (a === 'testGoal') return act('testGoal', { id })
+    if (a === 'setValue') return act('setValue', { id, value: item.querySelector('[data-f=setValue]').value })
+    if (a === 'reset') {
+      if (confirm('この項目を0に戻す？')) act('resetCounter', { id })
+      return
+    }
+    if (a === 'remove') {
+      if (confirm('この項目を削除する？')) {
+        openIds.delete(id)
+        act('remove', { id })
+      }
+    }
+  })
+
+  // 設定欄の変更は即保存
+  list.addEventListener('change', (e) => {
+    const f = e.target.dataset.f
+    if (!f || f === 'setValue') return
+    const id = e.target.closest('.item').dataset.id
+    const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value
+    const optKeys = ['cooldownSec', 'keyword', 'oncePerUser', 'includeGifts']
+    const patch = optKeys.includes(f) ? { opts: { [f]: v } } : { [f]: v }
+    editing = false
+    act('update', { id, patch })
+  })
+  list.addEventListener('focusin', (e) => {
+    if (e.target.matches('input, select')) editing = true
+  })
+  list.addEventListener('focusout', () => {
+    setTimeout(() => {
+      if (!list.contains(document.activeElement)) editing = false
+    }, 0)
+  })
+
+  document.getElementById('add').onclick = () => {
+    act('add', { counter: { name: '新しい項目', metric: 'manual', goal: 10 } }).then(() => {
+      const last = latest.counters[latest.counters.length - 1]
+      if (last) {
+        openIds.add(last.id)
+        renderList(true)
+      }
+    })
+  }
+
+  document.getElementById('newSession').onclick = () => {
+    if (confirm('新しい配信を始める？\nすべての数が0に戻る。')) act('newSession')
+  }
+
+  document.getElementById('position').onchange = (e) => act('setLayout', { layout: { position: e.target.value } })
+  document.getElementById('scale').oninput = (e) => {
+    document.getElementById('scaleText').textContent = Math.round(e.target.value * 100) + '%'
+  }
+  document.getElementById('scale').onchange = (e) => act('setLayout', { layout: { scale: Number(e.target.value) } })
+  document.getElementById('celebrate').onchange = (e) => act('setLayout', { layout: { celebrate: e.target.checked } })
+
+  // テスト
+  document.querySelectorAll('[data-sim]').forEach((b) => {
+    b.onclick = async () => {
+      const k = b.dataset.sim
+      const v = (id) => document.getElementById(id).value
+      if (k === 'comment') return act('simulate', { event: { kind: 'comment' } })
+      if (k === 'comment5') {
+        for (let i = 0; i < 5; i++) await act('simulate', { event: { kind: 'comment' } })
+        return
+      }
+      if (k === 'first') return act('simulate', { event: { kind: 'comment', firstTime: true } })
+      if (k === 'text') return act('simulate', { event: { kind: 'comment', text: v('simText') } })
+      if (k === 'superchat') return act('simulate', { event: { kind: 'superchat', amount: Number(v('simAmount')) } })
+      if (k === 'member') return act('simulate', { event: { kind: 'member' } })
+      if (k === 'meta') return act('simulate', { event: { kind: 'meta', viewer: Number(v('simViewer')), likes: Number(v('simLikes')) } })
+    }
+  })
+
+  FC.poll(
+    (s) => apply(s, false),
+    () => {
+      document.getElementById('dot').className = 'dot ng'
+      document.getElementById('statusText').textContent = 'わんコメのプラグインに接続できない'
+    },
+    700
+  )
+})()
+</script>
+</body>
+</html>

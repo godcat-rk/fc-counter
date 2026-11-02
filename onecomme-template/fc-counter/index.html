@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>fc-counter 表示</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Meiryo', sans-serif;
+    --size: 168px;
+  }
+  html, body {
+    margin: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background: transparent;
+    font-family: var(--font);
+  }
+
+  #board {
+    position: absolute;
+    display: flex;
+    gap: 28px;
+    padding: 40px;
+  }
+  #board.bottom-left { left: 0; bottom: 0; transform-origin: left bottom; }
+  #board.bottom-right { right: 0; bottom: 0; transform-origin: right bottom; flex-direction: row-reverse; }
+  #board.bottom-center { left: 50%; bottom: 0; transform-origin: center bottom; }
+  #board.top-left { left: 0; top: 0; transform-origin: left top; }
+  #board.top-right { right: 0; top: 0; transform-origin: right top; flex-direction: row-reverse; }
+  #board.left { left: 0; top: 50%; transform-origin: left center; flex-direction: column; }
+  #board.right { right: 0; top: 50%; transform-origin: right center; flex-direction: column; }
+
+  .cup {
+    position: relative;
+    width: var(--size);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    --lv: 0;
+  }
+
+  /* 器 */
+  .vessel {
+    position: relative;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.22), rgba(20,30,50,.45) 70%);
+    box-shadow:
+      inset 0 0 0 4px rgba(255,255,255,.85),
+      inset 0 -10px 24px rgba(0,0,0,.25),
+      0 6px 18px rgba(0,0,0,.35);
+    transition: box-shadow .6s;
+  }
+  .cup.wobble .vessel { animation: wobble .5s ease-out; }
+  @keyframes wobble {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.06, .95); }
+    60% { transform: scale(.97, 1.03); }
+    100% { transform: scale(1); }
+  }
+
+  /* 水 */
+  .water {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: calc(var(--lv) * 100%);
+    background: linear-gradient(180deg, var(--c-light) 0%, var(--c) 45%, var(--c-dark) 100%);
+    transition: height 1s cubic-bezier(.3,1.4,.5,1);
+  }
+  .wave {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% - 2px);
+    width: 200%;
+    height: 18px;
+    animation: wave 3.2s linear infinite;
+  }
+  .wave path { fill: var(--c-light); }
+  .wave.back { animation-duration: 5s; animation-direction: reverse; opacity: .55; bottom: calc(100% + 2px); }
+  .wave.back path { fill: var(--c); }
+  @keyframes wave { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  .bubble {
+    position: absolute;
+    bottom: 0;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.7);
+    animation: rise 1.6s ease-in forwards;
+  }
+  @keyframes rise {
+    to { transform: translateY(calc(var(--size) * -.8)) scale(.4); opacity: 0; }
+  }
+
+  .shine {
+    position: absolute;
+    left: 18%; top: 10%;
+    width: 30%; height: 18%;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,0));
+    transform: rotate(-25deg);
+    pointer-events: none;
+  }
+
+  .num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    line-height: 1;
+    paint-order: stroke fill;
+    -webkit-text-stroke: 6px rgba(20,25,40,.85);
+  }
+  .val { font-size: 44px; letter-spacing: -.02em; }
+  .goal { font-size: 18px; margin-top: 6px; opacity: .95; }
+  .pct { font-size: 15px; margin-top: 6px; -webkit-text-stroke-width: 5px; }
+
+  /* 札 */
+  .label {
+    max-width: calc(var(--size) + 40px);
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: rgba(20,25,40,.78);
+    border: 2px solid var(--c);
+    color: #fff;
+    font-size: 19px;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .live-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #ff3b3b;
+    flex: none;
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  /* しずく */
+  .drop {
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    width: 16px; height: 22px;
+    margin-left: -8px;
+    background: var(--c);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    box-shadow: inset -3px -3px 0 rgba(0,0,0,.15), 0 0 0 2px rgba(255,255,255,.8);
+    animation: fall .45s ease-in forwards;
+    z-index: 2;
+  }
+  @keyframes fall {
+    0% { transform: translateY(0) scale(.6); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translateY(70px) scale(1); opacity: 0; }
+  }
+
+  .plus {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    color: #fff;
+    font-weight: 800;
+    font-size: 26px;
+    paint-order: stroke fill;
+    -webkit-text-stroke: 5px var(--c);
+    animation: plus 1.1s ease-out forwards;
+    z-index: 3;
+    white-space: nowrap;
+  }
+  .plus.minus { -webkit-text-stroke-color: #555; }
+  @keyframes plus {
+    0% { transform: translateY(10px) scale(.6); opacity: 0; }
+    20% { transform: translateY(0) scale(1.15); opacity: 1; }
+    100% { transform: translateY(-36px) scale(1); opacity: 0; }
+  }
+
+  /* 達成後 */
+  .cup.done .vessel {
+    box-shadow:
+      inset 0 0 0 4px #ffe27a,
+      inset 0 -10px 24px rgba(0,0,0,.2),
+      0 0 22px 6px rgba(255,214,90,.75);
+  }
+  .badge {
+    position: absolute;
+    top: -14px;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: max-content;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #fff3b0, #ffc93c);
+    color: #6b4300;
+    font-size: 15px;
+    font-weight: 800;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    display: none;
+    z-index: 4;
+    white-space: nowrap;
+  }
+  .cup.done .badge { display: block; }
+  .cup.celebrate .vessel { animation: celebrate 1.2s ease-out; }
+  @keyframes celebrate {
+    0% { transform: scale(1); }
+    20% { transform: scale(1.18) rotate(-4deg); }
+    40% { transform: scale(1.1) rotate(4deg); }
+    60% { transform: scale(1.14) rotate(-2deg); }
+    100% { transform: scale(1); }
+  }
+
+  /* 画面全体の達成演出 */
+  #confetti { position: absolute; inset: 0; pointer-events: none; }
+  #banner {
+    position: absolute;
+    top: 120px;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: max-content;
+    padding: 18px 56px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #fff6c8, #ffcf4a);
+    color: #5a3800;
+    font-weight: 800;
+    font-size: 54px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 0 5px #fff;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #banner small { display: block; text-align: center; font-size: 26px; margin-top: 4px; }
+  #banner.show { animation: banner 3.4s cubic-bezier(.2,1.3,.4,1) forwards; }
+  @keyframes banner {
+    0% { opacity: 0; transform: scale(.4); }
+    12% { opacity: 1; transform: scale(1); }
+    85% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(.9) translateY(-20px); }
+  }
+
+  #offline {
+    position: absolute;
+    left: 16px; top: 16px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(160,0,0,.8);
+    color: #fff;
+    font-size: 16px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<canvas id="confetti" width="1920" height="1080"></canvas>
+<div id="banner"></div>
+<div id="offline">fc-counter: わんコメのプラグインに接続できない</div>
+
+<script src="common.js"></script>
+<script>
+(() => {
+  // ?bg=1 でブラウザ確認用の背景を付ける（OBSでは付けない）
+  if (new URLSearchParams(location.search).get('bg')) document.body.style.background = 'linear-gradient(135deg, #6a7c93, #2e3a4c)'
+  const board = document.getElementById('board')
+  const banner = document.getElementById('banner')
+  const offline = document.getElementById('offline')
+  const els = new Map() // counterId -> { root, shown, target }
+  let lastSeq = null
+  let sessionId = null
+  let latest = null
+  let failCount = 0
+
+  const WAVE = '<svg class="wave %c" viewBox="0 0 400 18" preserveAspectRatio="none"><path d="M0 9 Q 25 0 50 9 T 100 9 T 150 9 T 200 9 T 250 9 T 300 9 T 350 9 T 400 9 V18 H0 Z"/></svg>'
+
+  function build(c) {
+    const root = document.createElement('div')
+    root.className = 'cup'
+    root.innerHTML =
+      '<div class="badge">達成！</div>' +
+      '<div class="vessel">' +
+        '<div class="water">' + WAVE.replace('%c', 'back') + WAVE.replace('%c', 'front') + '</div>' +
+        '<div class="shine"></div>' +
+        '<div class="num"><span class="val">0</span><span class="goal"></span><span class="pct"></span></div>' +
+      '</div>' +
+      '<div class="label"><span class="name"></span></div>'
+    const rec = { root, shown: c.value, target: c.value }
+    els.set(c.id, rec)
+    return rec
+  }
+
+  function level(c) {
+    if (c.goal <= 0) return 0.5
+    return Math.min(1, c.value / c.goal)
+  }
+
+  function render(s) {
+    board.className = s.layout.position
+    const shift = { 'bottom-center': 'translateX(-50%) ', left: 'translateY(-50%) ', right: 'translateY(-50%) ' }[s.layout.position] || ''
+    board.style.transform = shift + 'scale(' + s.layout.scale + ')'
+
+    const visible = s.counters.filter((c) => c.visible)
+    const ids = new Set(visible.map((c) => c.id))
+    for (const [id, rec] of els) {
+      if (!ids.has(id)) {
+        rec.root.remove()
+        els.delete(id)
+      }
+    }
+    visible.forEach((c, i) => {
+      const rec = els.get(c.id) || build(c)
+      const r = rec.root
+      if (board.children[i] !== r) board.insertBefore(r, board.children[i] || null)
+      r.style.setProperty('--c', c.color)
+      r.style.setProperty('--c-light', mix(c.color, '#ffffff', 0.35))
+      r.style.setProperty('--c-dark', mix(c.color, '#000000', 0.3))
+      r.style.setProperty('--lv', level(c))
+      r.classList.toggle('done', !!c.achievedAt)
+      r.querySelector('.name').textContent = c.name
+      const label = r.querySelector('.label')
+      const dot = label.querySelector('.live-dot')
+      if (c.live && !dot) label.insertAdjacentHTML('afterbegin', '<span class="live-dot"></span>')
+      if (!c.live && dot) dot.remove()
+      r.querySelector('.goal').textContent = c.goal > 0 ? '/ ' + FC.fmt(c.goal) + unit(c) : unit(c)
+      r.querySelector('.pct').textContent = c.goal > 0 ? Math.floor((c.value / c.goal) * 100) + '%' : ''
+      rec.target = c.value
+    })
+  }
+
+  // 色を混ぜる（OBS内蔵ブラウザの古い版でも動くよう CSS の color-mix は使わない）
+  function mix(a, b, t) {
+    const p = (h) => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(h)
+      const n = m ? parseInt(m[1], 16) : 0x4fc3f7
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+    }
+    const x = p(a), y = p(b)
+    return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'
+  }
+
+  function unit(c) {
+    return c.metric === 'superchat' ? '円' : ''
+  }
+
+  // 数字を目標値へ少しずつ寄せる
+  function tickNumbers() {
+    for (const rec of els.values()) {
+      if (rec.shown !== rec.target) {
+        const diff = rec.target - rec.shown
+        const step = Math.sign(diff) * Math.max(1, Math.ceil(Math.abs(diff) * 0.15))
+        rec.shown = Math.abs(step) >= Math.abs(diff) ? rec.target : rec.shown + step
+      }
+      const text = FC.fmt(rec.shown)
+      if (rec.text !== text) {
+        rec.text = text
+        const v = rec.root.querySelector('.val')
+        v.textContent = text
+        // 桁が増えたら文字を小さくして器に収める
+        v.style.fontSize = Math.min(44, Math.floor(200 / Math.max(3, text.length))) + 'px'
+      }
+    }
+    requestAnimationFrame(tickNumbers)
+  }
+
+  function restart(el, cls) {
+    el.classList.remove(cls)
+    void el.offsetWidth
+    el.classList.add(cls)
+  }
+
+  function onChange(ev) {
+    const rec = els.get(ev.counterId)
+    if (!rec) return
+    const r = rec.root
+    const c = latest.counters.find((x) => x.id === ev.counterId)
+    const p = document.createElement('div')
+    p.className = 'plus' + (ev.delta < 0 ? ' minus' : '')
+    p.textContent = (ev.delta > 0 ? '+' : '') + FC.fmt(ev.delta) + (c ? unit(c) : '')
+    r.appendChild(p)
+    setTimeout(() => p.remove(), 1200)
+    if (ev.delta > 0) {
+      const d = document.createElement('div')
+      d.className = 'drop'
+      r.appendChild(d)
+      setTimeout(() => d.remove(), 500)
+      setTimeout(() => restart(r, 'wobble'), 380)
+      const water = r.querySelector('.water')
+      for (let i = 0; i < 3; i++) {
+        const b = document.createElement('div')
+        b.className = 'bubble'
+        b.style.left = 20 + Math.random() * 60 + '%'
+        b.style.animationDelay = 0.4 + i * 0.15 + 's'
+        water.appendChild(b)
+        setTimeout(() => b.remove(), 2400)
+      }
+    }
+  }
+
+  function onGoal(ev) {
+    const rec = els.get(ev.counterId)
+    const c = latest.counters.find((x) => x.id === ev.counterId)
+    if (rec) restart(rec.root, 'celebrate')
+    if (!latest.layout.celebrate || !c) return
+    banner.innerHTML = '🎉 目標達成！<small>' + FC.esc(c.name) + ' ' + FC.fmt(c.goal) + unit(c) + '</small>'
+    restart(banner, 'show')
+    confetti(c.color)
+  }
+
+  // 紙吹雪
+  const cv = document.getElementById('confetti')
+  const ctx = cv.getContext('2d')
+  let parts = []
+  let running = false
+  function confetti(color) {
+    const colors = [color, '#ffd54f', '#ffffff', '#ff8a80', '#81d4fa']
+    for (let i = 0; i < 180; i++) {
+      parts.push({
+        x: 960 + (Math.random() - 0.5) * 300,
+        y: 300,
+        vx: (Math.random() - 0.5) * 26,
+        vy: -Math.random() * 22 - 6,
+        r: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.4,
+        w: 10 + Math.random() * 10,
+        h: 6 + Math.random() * 6,
+        c: colors[i % colors.length],
+        life: 0,
+      })
+    }
+    if (!running) {
+      running = true
+      requestAnimationFrame(step)
+    }
+  }
+  function step() {
+    ctx.clearRect(0, 0, cv.width, cv.height)
+    parts = parts.filter((p) => p.y < 1150 && p.life < 300)
+    for (const p of parts) {
+      p.life++
+      p.vy += 0.45
+      p.vx *= 0.985
+      p.x += p.vx
+      p.y += p.vy
+      p.r += p.vr
+      ctx.save()
+      ctx.translate(p.x, p.y)
+      ctx.rotate(p.r)
+      ctx.fillStyle = p.c
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.life / 8)))
+      ctx.restore()
+    }
+    if (parts.length) requestAnimationFrame(step)
+    else {
+      running = false
+      ctx.clearRect(0, 0, cv.width, cv.height)
+    }
+  }
+
+  FC.poll(
+    (s) => {
+      failCount = 0
+      offline.style.display = 'none'
+      latest = s
+      if (sessionId !== s.session.id) {
+        // 新しい配信になったら数字を即座に合わせ直す
+        sessionId = s.session.id
+        for (const rec of els.values()) rec.root.remove()
+        els.clear()
+      }
+      render(s)
+      if (lastSeq === null) {
+        lastSeq = s.seq
+        return
+      }
+      for (const ev of s.events) {
+        if (ev.seq <= lastSeq) continue
+        if (ev.type === 'change') onChange(ev)
+        if (ev.type === 'goal') onGoal(ev)
+      }
+      lastSeq = s.seq
+    },
+    () => {
+      failCount++
+      if (failCount > 10) offline.style.display = 'block'
+    },
+    250
+  )
+  requestAnimationFrame(tickNumbers)
+})()
+</script>
+</body>
+</html>
